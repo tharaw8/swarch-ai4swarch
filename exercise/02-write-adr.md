@@ -35,10 +35,10 @@ language: Thai
 
 | เกณฑ์ | Run a | Run b |
 |---|---|---|
-| ใช้ตัวเลขจาก scenario หรือไม่ (latency, ช่วงพีก, ข้อจำกัดของ MailFast) | | |
-| ทางเลือกที่พิจารณา (ระบุ) | | |
-| จัดการแต้มสะสมแบบ "ครั้งเดียวเท่านั้น" และ rate limit ของ MailFast หรือไม่ อย่างไร | | |
-| มีสิ่งที่แต่งขึ้นเองหรือไม่ (ตัวเลข เครื่องมือ หรือข้อเท็จจริงที่ไม่มีใน scenario) | | |
+| ใช้ตัวเลขจาก scenario หรือไม่ (latency, ช่วงพีก, ข้อจำกัดของ MailFast) | ไม่ใช้เลย เพราะไม่เห็น scenario | ใช้ครบ: 500 ms / 300 ms, 200 orders/s, MailFast 1.5 s / 8 s / 0.5 % / 50/s, loyalty 1 นาที, ทีม 4 คน |
+| ทางเลือกที่พิจารณา (ระบุ) | 3 ทาง: sync call, broker (ไม่ระบุชื่อ), broker + outbox | 4 ทาง: sync gRPC, goroutine, RabbitMQ, Kafka (ไม่มี outbox เป็นทางเลือก) |
+| จัดการแต้มสะสมแบบ "ครั้งเดียวเท่านั้น" และ rate limit ของ MailFast หรือไม่ อย่างไร | ใช้ idempotent consumer โดยใช้ order id เป็น key (ไม่รู้ข้อกำหนด 1 นาที); ไม่พูดถึง rate limit เลย | loyalty ใช้ unique `order_id`; email ใช้ queue เป็น buffer และจำกัดที่ 50/s แต่ไม่ได้คิดกรณีมีหลาย replica; ปัญหา event หายตอน publish ล้มโยนไปไว้ใน Open questions |
+| มีสิ่งที่แต่งขึ้นเองหรือไม่ (ตัวเลข เครื่องมือ หรือข้อเท็จจริงที่ไม่มีใน scenario) | แทบไม่มี ส่วนที่ไม่รู้ใส่ไว้ใน Open questions 10 ข้อ (ADR จึงกว้างและทั่วไป) | มีอ้างว่า "หลัง commit order" ทั้งที่ `checkoutservice` ไม่มี data store; เอา p95 มาบวกกันตรง ๆ (300 + 1,500 ms); เล่าสถานะปัจจุบันไม่ครบ (ขาด cart, catalog, currency); HTTPS ของ MailFast ติดป้าย Assumption ไว้แล้ว |
 
 ## รับผิดชอบ ADR ฉบับสุดท้ายของตัวเอง
 
@@ -51,6 +51,7 @@ language: Thai
 
 | # | สิ่งที่เปลี่ยนจากร่างของ AI | เหตุผล |
 |---|---|---|
-| 1 | | |
-| 2 | | |
-| 3 | | |
+| 1 | ระบุว่า `checkoutservice` ไม่มี data store และเขียน "ข้อจำกัดที่ยอมรับ" ว่าฝั่ง producer ยังไม่ใช่ exactly once | ร่างของ AI อ้างถึงการ "commit order" ซึ่งไม่มีอยู่จริงใน `main.go` ถ้าไม่เขียนไว้ outbox จะดูเหมือนทำได้ง่าย |
+| 2 | เพิ่ม publisher confirms, timeout 100 ms และ buffer สำหรับ retry พร้อม metric | ร่างเดิมไม่บอกว่าจะกันไม่ให้ publish กิน latency เกิน headroom 200 ms อย่างไร |
+| 3 | กำหนดให้ rate limit 50/s เป็นค่ารวมทุก replica ของ `emailservice` | ถ้าแต่ละ pod จำกัด 50/s เอง ค่ารวมจะเกิน rate limit ของ MailFast |
+| 4 | เขียนสถานะปัจจุบันให้ครบ (cart, catalog, currency) พร้อมเลขบรรทัด และแก้แผนภาพให้มี `frontend` | ทำให้หลักฐานตรวจสอบได้ และแผนภาพถูกต้อง |

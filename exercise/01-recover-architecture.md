@@ -38,15 +38,21 @@ evidence: system/online-boutique/protos/demo.proto, system/online-boutique/kuber
 
 | ผู้เรียก → ผู้ถูกเรียก | หลักฐานที่ AI อ้าง | ยืนยันแล้วหรือไม่ ✅ / ❌ / ❓ | สิ่งที่นิสิตพบ |
 |---|---|---|---|
-| | | | |
-| | | | |
-| | | | |
-| | | | |
-| | | | |
+| frontend → cartservice | frontend.yaml CART_SERVICE_ADDR | ✅ | src/frontend/rpc.go:58 เรียก GetCart |
+| checkoutservice → paymentservice | checkoutservice.yaml PAYMENT_SERVICE_ADDR | ✅ | src/checkoutservice/main.go:370 เรียก Charge |
+| checkoutservice → emailservice | EMAIL_SERVICE_ADDR | ✅ | main.go:380 เรียก SendOrderConfirmation |
+| recommendationservice → productcatalogservice | PRODUCT_CATALOG_SERVICE_ADDR | ✅ | recommendation_server.py:131-136 |
+| cartservice → redis-cart | REDIS_ADDR=redis-cart:6379 | ✅ | src/cartservice/src/Startup.cs:34-41 ใช้ Redis cache |
 
-- **สิ่งที่ผิดหรือขาดหายไป** ใน Run B (dependency ที่ไม่มีจริง, dependency ที่ขาดไป, container ที่น่าสงสัย): …
+- **สิ่งที่ผิดหรือขาดหายไป** ใน Run B (dependency ที่ไม่มีจริง, dependency ที่ขาดไป, container ที่น่าสงสัย):
+  - ขาดเส้น frontend → shoppingassistantservice ซึ่งเป็น HTTP ไม่ใช่ gRPC (src/frontend/handlers.go:464-472) เปิดใช้ก็ต่อเมื่อตั้ง ENABLE_ASSISTANT=true
+  - loadgenerator ถูกวางไว้ในขอบเขตระบบ แต่จริง ๆ เป็นเครื่องมือทดสอบ Locust (src/loadgenerator/Dockerfile:52)
+  - ไม่ได้พูดถึงเส้นที่เปิดใช้ได้ตามตัวเลือก ได้แก่ tracing collector, packaging service และการเก็บตะกร้าบน Spanner/AlloyDB แทน Redis
+  - redis-cart เก็บข้อมูลแบบ emptyDir ข้อนี้ AI บอกถูกว่าตะกร้าหายเมื่อรีสตาร์ต
 
 ## สะท้อนคิด (ข้อละ 2–3 ประโยค)
 
 1. เปรียบเทียบ A กับ B: agent **ไม่สามารถ**รู้อะไรได้จากไฟล์ `.proto` เพียงไฟล์เดียว และเพราะเหตุใด
+  - .proto บอกแค่ว่าแต่ละ service ให้บริการอะไร แต่ไม่บอกว่าใครเรียกใคร ใช้ data store อะไร และ frontend มีอยู่หรือไม่ เพราะ frontend ไม่มี proto ข้อมูล wiring พวกนี้อยู่ใน env var ของไฟล์ deploy
 2. ข้อผิดพลาด**ข้อใดข้อหนึ่ง**ที่จะทำให้สมาชิกใหม่ของทีมเข้าใจผิดมากที่สุด หากเผยแพร่แผนภาพนี้โดยไม่ตรวจสอบ
+   - ถ้าแผนภาพไม่มี shoppingassistantservice สมาชิกใหม่จะคิดว่าทุกเส้นเป็น gRPC และระบบไม่มีการเรียกออกภายนอก แต่ถ้าเปิดฟีเจอร์ assistant ระบบจะเรียก HTTP ไปยัง AlloyDB และ Google AI ด้วย
